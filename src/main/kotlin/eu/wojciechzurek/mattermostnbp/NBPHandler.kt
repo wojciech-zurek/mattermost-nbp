@@ -91,7 +91,8 @@ class NBPHandler(
                 }
                 .collect(Collectors.joining())
                 .map { messageSource.getMessage("theme.rates", arrayOf(it), Locale.getDefault()) }
-                .map { MattermostResponse(receiver, it) }.flatMap { ok().bodyValue(it) }
+                .map { MattermostResponse(receiver, it) }
+                .flatMap { ok().bodyValue(it) }
                 .toMono()
     }
 }
