@@ -1,6 +1,7 @@
 package eu.wojciechzurek.mattermostnbp.api
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import java.math.BigDecimal
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class TableCResponse(
@@ -11,6 +12,6 @@ data class TableCResponse(
 data class TableC(
         val code: String,
         val currency: String,
-        val ask: Float,
-        val bid: Float
+        val ask: BigDecimal,
+        val bid: BigDecimal
 )

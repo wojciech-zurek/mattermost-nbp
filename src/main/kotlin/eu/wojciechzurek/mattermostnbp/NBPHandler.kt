@@ -1,17 +1,23 @@
 package eu.wojciechzurek.mattermostnbp
 
 import eu.wojciechzurek.mattermostnbp.api.*
+import org.springframework.context.MessageSource
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClient
 import org.springframework.web.reactive.function.client.bodyToMono
 import org.springframework.web.reactive.function.server.ServerRequest
 import org.springframework.web.reactive.function.server.ServerResponse
+import org.springframework.web.reactive.function.server.ServerResponse.ok
 import reactor.core.publisher.Mono
-import reactor.core.publisher.toFlux
+import reactor.kotlin.core.publisher.toMono
+import java.util.*
+import java.util.stream.Collectors
 
 @Component
-class NBPHandler {
+class NBPHandler(
+        private val messageSource: MessageSource
+) {
 
     private val logger = loggerFor(this.javaClass)
     private val webClient = WebClient.builder()
@@ -19,6 +25,12 @@ class NBPHandler {
             .build()
 
     fun nbp(request: ServerRequest): Mono<ServerResponse> {
+
+        val receiver = when (request.queryParam("text").orElse("ephemeral")) {
+            "channel" -> "in_channel"
+            "kanal" -> "in_channel"//polish channel
+            else -> "ephemeral"
+        }
 
         val gold = webClient
                 .get()
@@ -28,10 +40,8 @@ class NBPHandler {
                     it.bodyToMono<String>().subscribe { body -> logger.error(body) }
                     Mono.error(NBPApiException(it.statusCode(), "NBP Endpoint exception"))
                 }
-                .bodyToMono(GoldResponse::class.java)
-                .map {
-                    "gld" to Rate("złoto", it.price)
-                }
+                .bodyToFlux(GoldResponse::class.java)
+                .map { "GLD" to Rate("złoto", it.price) }
 
         val tableAResponse = webClient
                 .get()
@@ -41,10 +51,9 @@ class NBPHandler {
                     it.bodyToMono<String>().subscribe { body -> logger.error(body) }
                     Mono.error(NBPApiException(it.statusCode(), "NBP Endpoint exception"))
                 }
-                .bodyToMono(TableAResponse::class.java)
+                .bodyToFlux(TableAResponse::class.java)
                 .flatMapIterable { it.rates }
-                .map { it.code to Rate(it.currency, it.mid) }
-
+                .collectMap { it.code }
 
         val tableCResponse = webClient
                 .get()
@@ -54,16 +63,35 @@ class NBPHandler {
                     it.bodyToMono<String>().subscribe { body -> logger.error(body) }
                     Mono.error(NBPApiException(it.statusCode(), "NBP Endpoint exception"))
                 }
-                .bodyToMono(TableCResponse::class.java)
+                .bodyToFlux(TableCResponse::class.java)
                 .flatMapIterable { it.rates }
-                .map { it.code to Rate(it.currency, ask = it.ask, bid = it.bid) }
+                .collectMap { it.code }
 
-        tableAResponse.con(tableCResponse)
+        val tables = tableAResponse
+                .zipWith(tableCResponse)
+                .map { tuple ->
+                    tuple.t1.map {
+                        val tableCRate = tuple.t2[it.key]
+                        it.key to Rate(
+                                it.value.currency,
+                                it.value.mid,
+                                tableCRate?.ask,
+                                tableCRate?.bid
+                        )
+                    }
+                }.flatMapIterable { it }
+                .sort { o1, o2 -> naturalOrder<String>().compare(o1.second.currency.toLowerCase(), o2.second.currency.toLowerCase()) }
 
-        //tableAResponse.zipWith(tableCResponse).map {
 
-        //    }
-        //  val y= goldResponse.concatWith(x)).
+        return gold.concatWith(tables)
+                .map {
+                    messageSource.getMessage(
+                            "theme.rates.row", arrayOf(it.first, it.second.currency, it.second.mid.toString(), it.second.bid?.toString()
+                            ?: "", it.second.ask?.toString() ?: ""), Locale.getDefault())
+                }
+                .collect(Collectors.joining())
+                .map { messageSource.getMessage("theme.rates", arrayOf(it), Locale.getDefault()) }
+                .map { MattermostResponse(receiver, it) }.flatMap { ok().bodyValue(it) }
+                .toMono()
     }
-
 }

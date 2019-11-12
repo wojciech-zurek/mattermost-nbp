@@ -16,7 +16,7 @@ class MattermostNbpApplication{
 	fun routes(handler: NBPHandler) = router {
 		"/api".nest {
 			accept(MediaType.APPLICATION_JSON).nest {
-				GET("/nbp/", handler::nbp)
+				GET("/nbp", handler::nbp)
 			}
 		}
 	}
