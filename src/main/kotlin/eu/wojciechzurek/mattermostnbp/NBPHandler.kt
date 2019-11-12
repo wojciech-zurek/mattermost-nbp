@@ -10,7 +10,6 @@ import org.springframework.web.reactive.function.server.ServerRequest
 import org.springframework.web.reactive.function.server.ServerResponse
 import org.springframework.web.reactive.function.server.ServerResponse.ok
 import reactor.core.publisher.Mono
-import reactor.kotlin.core.publisher.toMono
 import java.util.*
 import java.util.stream.Collectors
 
@@ -79,7 +78,8 @@ class NBPHandler(
                                 tableCRate?.bid
                         )
                     }
-                }.flatMapIterable { it }
+                }
+                .flatMapIterable { it }
                 .sort { o1, o2 -> naturalOrder<String>().compare(o1.second.currency.toLowerCase(), o2.second.currency.toLowerCase()) }
 
 
@@ -93,6 +93,5 @@ class NBPHandler(
                 .map { messageSource.getMessage("theme.rates", arrayOf(it), Locale.getDefault()) }
                 .map { MattermostResponse(receiver, it) }
                 .flatMap { ok().bodyValue(it) }
-                .toMono()
     }
 }
