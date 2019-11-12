@@ -40,7 +40,7 @@ class NBPHandler(
                     Mono.error(NBPApiException(it.statusCode(), "NBP Endpoint exception"))
                 }
                 .bodyToFlux(GoldResponse::class.java)
-                .map { "GLD" to Rate("złoto", it.price) }
+                .map { Rate("GLD", "złoto", it.price) }
 
         val tableAResponse = webClient
                 .get()
@@ -71,7 +71,8 @@ class NBPHandler(
                 .map { tuple ->
                     tuple.t1.map {
                         val tableCRate = tuple.t2[it.key]
-                        it.key to Rate(
+                        Rate(
+                                it.key,
                                 it.value.currency,
                                 it.value.mid,
                                 tableCRate?.ask,
@@ -80,14 +81,14 @@ class NBPHandler(
                     }
                 }
                 .flatMapIterable { it }
-                .sort { o1, o2 -> naturalOrder<String>().compare(o1.second.currency.toLowerCase(), o2.second.currency.toLowerCase()) }
+                .sort { o1, o2 -> naturalOrder<String>().compare(o1.currency.toLowerCase(), o2.currency.toLowerCase()) }
 
 
         return gold.concatWith(tables)
                 .map {
                     messageSource.getMessage(
-                            "theme.rates.row", arrayOf(it.first, it.second.currency, it.second.mid.toString(), it.second.bid?.toString()
-                            ?: "", it.second.ask?.toString() ?: ""), Locale.getDefault())
+                            "theme.rates.row", arrayOf(it.code, it.currency, it.mid.toString(), it.bid?.toString()
+                            ?: "", it.ask?.toString() ?: ""), Locale.getDefault())
                 }
                 .collect(Collectors.joining())
                 .map { messageSource.getMessage("theme.rates", arrayOf(it), Locale.getDefault()) }
